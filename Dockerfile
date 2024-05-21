@@ -48,7 +48,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set the DISPLAY environment variable
 
-ENV DISPLAY host.docker.internal:0
+#ENV DISPLAY host.docker.internal:0
 
 # Copy the coap-controller directory from your host to the Docker image
 
@@ -57,6 +57,11 @@ COPY coap-eap-controller /home/contiki/coap-eap-controller
 # Copy the Contiki directory from your host to the Docker image
 
 COPY contiki-2.7 /home/contiki/contiki-2.7
+
+# Copy the observer and scripts
+
+COPY observer /home/contiki/observer
+COPY scripts /home/contiki/scripts
 
 # Set the working directory to where your Cooja simulation is
 
@@ -92,6 +97,10 @@ RUN cp ./freeradius_mod_files/modules.c ./freeradius-server-2.0.2/src/main/ && \
 
 WORKDIR /home/contiki/coap-eap-tfg/freeradius-2.0.2-psk/freeradius-server-2.0.2
 
+# Add this step to give execute permissions to the configure script
+RUN chmod +x ./configure ./install-sh
+
+# Run the configure script
 RUN ./configure --prefix=/home/contiki/freeradius-psk --with-modules=rlm_eap2 && \
 	make && \
 	make install
@@ -108,9 +117,13 @@ RUN cp ./freeradius_mod_files/eap.conf /home/contiki/freeradius-psk/etc/raddb &&
 
 ENV LD_PRELOAD=/home/contiki/coap-eap-tfg/freeradius-2.0.2-psk/hostapd/eap_example/libeap.so
 
+# Expose port
+
+EXPOSE 5000
+
 # Set the working directory in the container
 
-WORKDIR /home/contiki
+WORKDIR /home/contiki/scripts
 
 CMD ["bash"]
 
