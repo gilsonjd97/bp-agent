@@ -38,13 +38,17 @@ RUN apt-get update && apt-get install -y \
 	xauth \
 	wget \
 	unzip \
-	python \
-	python-pip \
-	python-dev \
+	nano \
+	python3 \
+	python3-pip \
+	python3-dev \
 	gcc-msp430 \
 	msp430-libc \
 	mspdebug \
+	ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
+
+RUN update-certificates
 
 # Download and install libssl1.1 for i386
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_i386.deb && \
