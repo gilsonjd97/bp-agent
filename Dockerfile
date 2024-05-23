@@ -46,6 +46,12 @@ RUN apt-get update && apt-get install -y \
 	mspdebug \
 	&& rm -rf /var/lib/apt/lists/*
 
+# Download and install libssl1.1 for i386
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_i386.deb && \
+    dpkg -i libssl1.1_1.1.0g-2ubuntu4_i386.deb && \
+    apt-get install -f && \
+    rm libssl1.1_1.1.0g-2ubuntu4_i386.deb
+    
 # Set the DISPLAY environment variable
 
 #ENV DISPLAY host.docker.internal:0
