@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, HTTPServer
 
 # Global variables to store MSK Key and sent UUID
 msk_key_global = None
-sent_uuid = None
+uuid = None
 msk_encoded = None
 
 # HTTP request handler
@@ -38,12 +38,13 @@ class RequestHandler(SimpleHTTPRequestHandler):
         received_uuid = data.get("uuid", "")
         received_ack = data.get("value", "")
 
-        if received_uuid != sent_uuid:
+        if received_uuid != uuid:
             self.send_response(400)
             self.end_headers()
             self.wfile.write(json.dumps({"error": "UUID mismatch"}).encode())
             return
 
+        print("Received ack, processing...")
         with open('/home/contiki/coap-eap-controller/src/ack.txt', 'w') as file:
             file.write("device_id: {},\nACK: {},\nMSK: {}".format(received_uuid, received_ack, msk_encoded))
 
@@ -66,7 +67,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
         received_uuid = data.get("device_id", "")
         received_ack = data.get("ACK", "")
 
-        if received_uuid != sent_uuid:
+        if received_uuid != uuid:
             self.send_response(400)
             self.end_headers()
             self.wfile.write(json.dumps({"error": "UUID mismatch"}).encode())
@@ -121,21 +122,21 @@ def handle_25_file():
         key, value = line.strip().split(': ', 1)
         data_dict[key] = value
 
-    global msk_key_global, sent_uuid
-    msk_key_global = data_dict.get('MSK Key', '')  # Save MSK Key for later
-    sent_uuid = str(uuid.uuid4())  # Generate and store UUID
+    global msk_key_global, uuid
+    msk_key_global = data_dict.get('msk', '')  # Save MSK Key for later
+    uuid = data_dict.get('uuid', '')  # Save uuid for later
 
-    url = "http://10.0.0.8:4321/boostrapping"  # Replace with the actual URL
+    url = "http://localhost:4321/boostrapping"  # Replace with the actual URL
     headers = {'Content-Type': 'application/json'}
     payload = {
-        'uuid': sent_uuid,  # Send stored UUID
-        'device': data_dict.get('Device', ''),
-        'ip_address': data_dict.get('IP Address', ''),
-        'mud-url': "http://example.com/mud.json"
+        'uuid': uuid,  # Send stored UUID
+        'device': data_dict.get('device', ''),
+        'ip_address': data_dict.get('ip_address', ''),
+        'mud-url': "http://localhost:8091/MUD_Collins_Bootstrapping"
     }
 
     try:
-        response = requests.post(url, data=json.dumps(payload), headers=headers)
+        response = retry_request(url, payload, headers)
         response_data = response.json() if response.headers.get('Content-Type') == 'application/json' else response.text
         print("POST request successful: ", response_data)
     except requests.RequestException as e:
@@ -144,7 +145,7 @@ def handle_25_file():
 def handle_50_file():
     print("File 50.txt has been modified, processing...")
     file_path = '/home/contiki/coap-eap-controller/src/50.txt'
-    
+
     try:
         with open(file_path, 'r') as file:
             data = file.readlines()
@@ -152,10 +153,10 @@ def handle_50_file():
                 print("File is empty")
                 return
     except FileNotFoundError:
-        print("File not found: {file_path}")
+        print("File not found: {}".format(file_path))
         return
     except Exception as e:
-        print("Error reading file {file_path}: {e}")
+        print("Error reading file {}: {}".format(file_path, e))
         return
 
     data_dict = {}
@@ -164,49 +165,58 @@ def handle_50_file():
             key, value = line.strip().split(': ', 1)
             data_dict[key] = value
         else:
-            print("Line format incorrect: {line}")
+            print("Line format incorrect: {}".format(line))
             continue
 
-    global msk_key_global, sent_uuid, msk_encoded
-    msk_key_global = data_dict.get('MSK', msk_key_global)  # Update MSK if present
-
     if not msk_key_global:
-        print("MSK Key not found in file")
+        print("MSK Key not found")
         return
 
     try:
         binary_data = bytes.fromhex(msk_key_global)
         msk_encoded = base64.b64encode(binary_data).decode()
     except ValueError as e:
-        print("Error encoding MSK Key: {e}")
+        print("Error encoding MSK Key: {}".format(e))
         return
 
-    # Print the encoded MSK
-    print("msk_encoded = {msk_encoded}")
-    prinf(msk_key_global)
+    #Print the encoded MSK
+    #print("msk_encoded = {}".format(msk_encoded))
+    #print(msk_key_global)
 
-    url = "http://10.0.0.8:5024/presentPsk"  # Replace with the actual URL
+    url = "http://localhost:5024/presentPsk"  # Replace with the actual URL
     headers = {'Content-Type': 'application/json'}
     payload = {
-        'device_id': sent_uuid,
+        'device_id': uuid,
         'base64Psk': msk_encoded
     }
 
     try:
-        response = requests.post(url, data=json.dumps(payload), headers=headers)
+        response = retry_request(url, payload, headers)
         response.raise_for_status()  # Raise an HTTPError on bad response
         response_data = response.json() if response.headers.get('Content-Type') == 'application/json' else response.text
         print({'status': 'Second POST request successful', 'response': response_data})
-        
+
         # Write to 53.txt after successful POST response
         output_file_path = '/home/contiki/coap-eap-controller/src/53.txt'
         try:
             with open(output_file_path, 'w') as file:
-                file.write("device_id: {},\nACK: {}".format(sent_uuid, 'ok'))
+                file.write("device_id: {},\nACK: {}".format(uuid, 'ok'))
         except Exception as e:
-            print("Error writing to file {output_file_path}: {e}")
+            print("Error writing to file {}: {}".format(output_file_path, e))
     except requests.RequestException as e:
         print({'error': str(e)})
+
+def retry_request(url, payload, headers, retries=3, delay=5):
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, data=json.dumps(payload), headers=headers)
+            response.raise_for_status()  # Raise an HTTPError on bad response
+            return response
+        except requests.RequestException as e:
+            print("Attempt {} failed: {}".format(attempt + 1, e))
+            if attempt + 1 == retries:
+                raise
+            time.sleep(delay)
 
 if __name__ == '__main__':
     # Start the HTTP server
