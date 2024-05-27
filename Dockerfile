@@ -48,8 +48,6 @@ RUN apt-get update && apt-get install -y \
 	ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN update-certificates
-
 # Download and install libssl1.1 for i386
 RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.0g-2ubuntu4_i386.deb && \
     dpkg -i libssl1.1_1.1.0g-2ubuntu4_i386.deb && \
@@ -130,6 +128,10 @@ ENV LD_PRELOAD=/home/contiki/coap-eap-tfg/freeradius-2.0.2-psk/hostapd/eap_examp
 # Expose port
 
 EXPOSE 5000
+
+# Chmod
+
+RUN chmod +x /home/contiki/scripts/* /home/contiki/contiki-2.7/tools/tunslip6 /home/contiki/coap-eap-controller/src/openpaa
 
 # Set the working directory in the container
 
